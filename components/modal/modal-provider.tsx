@@ -1,15 +1,7 @@
 "use client";
 
-import type React from "react";
-
-import {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  useCallback,
-} from "react";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import ModalManager from "./modal-manager";
 
 type ModalType = "product" | "cart" | null;
@@ -38,12 +30,14 @@ export function ModalProvider({ children }: { children: React.ReactNode }) {
 
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
 
-  // Check URL for modal parameters on initial load and when URL changes
+  // Use window.location.search to get query params (only on client)
   useEffect(() => {
-    const modal = searchParams.get("modal");
-    const id = searchParams.get("id");
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    const modal = params.get("modal");
+    const id = params.get("id");
 
     if (modal) {
       setModalType(modal as ModalType);
@@ -54,20 +48,17 @@ export function ModalProvider({ children }: { children: React.ReactNode }) {
       setModalId(null);
       setIsOpen(false);
     }
-  }, [searchParams]);
+  }, [pathname]); // re-run when the pathname changes
 
   const openModal = useCallback(
     (type: ModalType, id?: string) => {
-      // Store current scroll position before opening modal
       if (typeof window !== "undefined") {
-        // Save the current scroll position in sessionStorage
         sessionStorage.setItem("scrollPosition", window.scrollY.toString());
       }
 
-      // Create a new URLSearchParams instance
-      const params = new URLSearchParams(searchParams.toString());
+      // Use the current window.location.search as a starting point
+      const params = new URLSearchParams(window.location.search);
 
-      // Update the parameters
       if (type) {
         params.set("modal", type);
         if (id) params.set("id", id);
@@ -76,33 +67,25 @@ export function ModalProvider({ children }: { children: React.ReactNode }) {
         params.delete("id");
       }
 
-      // Update the URL without scrolling
       const newUrl = `${pathname}?${params.toString()}`;
       router.push(newUrl, { scroll: false });
 
-      // Update state
       setModalType(type);
       setModalId(id || null);
       setIsOpen(!!type);
     },
-    [pathname, router, searchParams]
+    [pathname, router]
   );
 
   const closeModal = useCallback(() => {
-    // Create a new URLSearchParams instance
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams(window.location.search);
 
-    // Remove modal parameters
     params.delete("modal");
     params.delete("id");
 
-    // Update the URL without scrolling
-    const newUrl = params.toString()
-      ? `${pathname}?${params.toString()}`
-      : pathname;
+    const newUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
     router.push(newUrl, { scroll: false });
 
-    // Update state
     setModalType(null);
     setModalId(null);
     setIsOpen(false);
@@ -116,12 +99,10 @@ export function ModalProvider({ children }: { children: React.ReactNode }) {
         }
       }
     }, 0);
-  }, [pathname, router, searchParams]);
+  }, [pathname, router]);
 
   return (
-    <ModalContext.Provider
-      value={{ openModal, closeModal, modalType, modalId, isOpen }}
-    >
+    <ModalContext.Provider value={{ openModal, closeModal, modalType, modalId, isOpen }}>
       {children}
       <ModalManager />
     </ModalContext.Provider>
